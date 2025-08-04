@@ -215,6 +215,13 @@ def main(config_path, inference, audio_path, text):
                                     load_only_params=config.get('load_only_params', True))
         
     n_down = model.text_aligner.n_down
+    # inference function call
+
+    if inference:
+    assert audio_path is not None, "You must provide --audio_path for inference"
+    assert text is not None, "You must provide --text for inference"
+    inference_viseme_json(audio_path, text)
+    return
 
     best_loss = float('inf')  # best test loss
     loss_train_record = list([])
