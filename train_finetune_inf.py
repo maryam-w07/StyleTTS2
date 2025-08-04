@@ -52,7 +52,7 @@ logger.addHandler(handler)
 @click.option('--inference', is_flag=True, help="Run inference mode instead of training.")
 @click.option('--audio_path', type=str, help="Path to input audio for inference.")
 @click.option('--text', type=str, help="Input text for inference.")
-def main(config_path):
+def main(config_path, inference, audio_path, text):
     config = yaml.safe_load(open(config_path))
     
     log_dir = config['log_dir']
