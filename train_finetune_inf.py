@@ -93,6 +93,30 @@ def main(config_path, inference, audio_path, text):
     joint_epoch = loss_params.joint_epoch
     
     optimizer_params = Munch(config['optimizer_params'])
+
+    # --- Parameters and transforms inf ---
+    to_mel = torchaudio.transforms.MelSpectrogram(
+        n_mels=80, n_fft=2048, win_length=1200, hop_length=300)
+    mean, std = -4, 4
+
+    # --- Utility functions inf ---
+    def extract_mel(wave):
+        # wave: numpy array (T,)
+        wave_tensor = torch.from_numpy(wave).float()
+        mel_tensor = to_mel(wave_tensor)
+        mel_tensor = (torch.log(1e-5 + mel_tensor.unsqueeze(0)) - mean) / std
+        return mel_tensor  # shape: (1, 80, T)
+        
+    def prepare_audio(audio_path, sample_rate=24000):
+        wav, sr = sf.read(audio_path)
+        if len(wav.shape) == 2:
+            wav = wav[:, 0]
+        if sr != sample_rate:
+            wav = librosa.resample(wav, orig_sr=sr, target_sr=sample_rate)
+    # Pad with 5000 zeros at start and end (as in meldataset.py)
+    wav = np.concatenate([np.zeros([5000]), wav, np.zeros([5000])], axis=0)
+    return wav
+
     
     train_list, val_list = get_data_path_list(train_path, val_path)
     device = 'cuda'
@@ -236,18 +260,15 @@ def main(config_path, inference, audio_path, text):
         sample_rate = 24000
         frame_duration_ms = hop_length / sample_rate * 1000  # = 12.5 ms
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        
+        # 1. Load and preprocess audio to get mel spectrogram
+        wav = prepare_audio(audio_path, sample_rate=sample_rate)
+        mels = extract_mel(wav)
+        mels = mels.to(device)
 
-        # 1. Load and preprocess audio
-        wav, sr = torchaudio.load(audio_path)
-        wav = wav.to(device)
-        if sr != sample_rate:
-            wav = torchaudio.functional.resample(wav, sr, sample_rate)
 
-        # 2. Extract real mel spectrogram using your training pipeline
-        mel_extractor = train_dataloader.dataset.mel_extractor  # or your actual mel extraction
-        mels = mel_extractor(wav)  # Should be shape (1, n_mels, T), matches training
 
-        # 3. Phonemize the input text
+        # 2. Phonemize the input text
         phoneme_text = phonemize(
             text, language='en-us', backend='espeak', strip=True, preserve_punctuation=True, njobs=1
         )
