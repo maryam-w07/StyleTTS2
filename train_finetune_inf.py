@@ -246,10 +246,18 @@ def main(config_path, inference, audio_path, text):
         mel_extractor = train_dataloader.dataset.mel_extractor  # or your actual mel extraction
         mels = mel_extractor(wav)  # Should be shape (1, n_mels, T), matches training
 
+        # 3. Phonemize the input text
+        phoneme_text = phonemize(
+            text, language='en-us', backend='espeak', strip=True, preserve_punctuation=True, njobs=1
+        )
+        # Optionally remove extra spaces or join if your text_cleaner expects a string
+        phoneme_text = phoneme_text.replace(" ", "")
+        # print("Phonemized text:", phoneme_text)
+
         # 3. Prepare text ids
         text_cleaner = train_dataloader.dataset.text_cleaner
         text_ids = torch.LongTensor(
-            text_cleaner.text_to_sequence(text)
+            text_cleaner.text_to_sequence(phoneme_text)
         ).unsqueeze(0).to(device)
         input_lengths = torch.LongTensor([text_ids.shape[1]]).to(device)
 
