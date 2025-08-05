@@ -12,6 +12,9 @@ import librosa
 import click
 import shutil
 import warnings
+import torchaudio
+import torch
+import json
 warnings.simplefilter('ignore')
 from torch.utils.tensorboard import SummaryWriter
 
@@ -216,47 +219,53 @@ def main(config_path, inference, audio_path, text):
         
     n_down = model.text_aligner.n_down
     # inference function definition
-    import torchaudio
-    import torch
-    import json
-    def inference_viseme_json(audio_path, text):
-        """
-        Given an audio file and input text, produce viseme JSON using forced alignment from the ASR model.
-        Assumes all needed objects (model, train_dataloader, etc.) are loaded in script.
-        """
-        # Load phoneme_to_viseme mapping (update path if needed)
-        with open('/content/phoneme_to_viseme.json', 'r', encoding='utf-8') as f:
-            phoneme_to_viseme = json.load(f)
-        skip_symbols = set(';:,.!?¡¿—…\"«»“”ǃˈˌːˑʼ˞↓↑→↗↘̩ᵻ')
-        hop_length = 300
-        sample_rate = 24000
-        frame_duration_ms = hop_length / sample_rate * 1000  # = 12.5 ms
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        # 1. Load and preprocess audio
-        wav, sr = torchaudio.load(audio_path)
-        wav = wav.to(device)
-        if sr != sample_rate:
-            wav = torchaudio.functional.resample(wav, sr, sample_rate)
-       # 2. Extract real mel spectrogram using your training pipeline
-       mel_extractor = train_dataloader.dataset.mel_extractor  # or your actual mel extraction
-       mels = mel_extractor(wav)  # Should be shape (1, n_mels, T), matches training
-       # 3. Prepare text ids
-       text_cleaner = train_dataloader.dataset.text_cleaner
-       text_ids = torch.LongTensor(
-           text_cleaner.text_to_sequence(text)
-       ).unsqueeze(0).to(device)
-       input_lengths = torch.LongTensor([text_ids.shape[1]]).to(device)
-       # 4. Run forced alignment with real mels
-       text_aligner = model['text_aligner']
-       text_aligner.eval()
-       n_down = text_aligner.n_down
-       with torch.no_grad():
-           mel_len = mels.shape[-1]
-           mask = length_to_mask(torch.LongTensor([mel_len // (2 ** n_down)])).to(device)
-           _, _, s2s_attn = text_aligner(mels, mask, text_ids)
-           s2s_attn = s2s_attn.transpose(-1, -2)
-           s2s_attn = s2s_attn[..., 1:]
-           s2s_attn = s2s_attn.transpose(-1, -2)
+
+
+
+def inference_viseme_json(audio_path, text):
+    """
+    Given an audio file and input text, produce viseme JSON using forced alignment from the ASR model.
+    Assumes all needed objects (model, train_dataloader, etc.) are loaded in script.
+    """
+    # Load phoneme_to_viseme mapping (update path if needed)
+    with open('/content/phoneme_to_viseme.json', 'r', encoding='utf-8') as f:
+        phoneme_to_viseme = json.load(f)
+
+    skip_symbols = set(';:,.!?¡¿—…\"«»“”ǃˈˌːˑʼ˞↓↑→↗↘̩ᵻ')
+    hop_length = 300
+    sample_rate = 24000
+    frame_duration_ms = hop_length / sample_rate * 1000  # = 12.5 ms
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    # 1. Load and preprocess audio
+    wav, sr = torchaudio.load(audio_path)
+    wav = wav.to(device)
+    if sr != sample_rate:
+        wav = torchaudio.functional.resample(wav, sr, sample_rate)
+
+    # 2. Extract real mel spectrogram using your training pipeline
+    mel_extractor = train_dataloader.dataset.mel_extractor  # or your actual mel extraction
+    mels = mel_extractor(wav)  # Should be shape (1, n_mels, T), matches training
+
+    # 3. Prepare text ids
+    text_cleaner = train_dataloader.dataset.text_cleaner
+    text_ids = torch.LongTensor(
+        text_cleaner.text_to_sequence(text)
+    ).unsqueeze(0).to(device)
+    input_lengths = torch.LongTensor([text_ids.shape[1]]).to(device)
+
+    # 4. Run forced alignment with real mels
+    text_aligner = model['text_aligner']
+    text_aligner.eval()
+    n_down = text_aligner.n_down
+
+    with torch.no_grad():
+        mel_len = mels.shape[-1]
+        mask = length_to_mask(torch.LongTensor([mel_len // (2 ** n_down)])).to(device)
+        _, _, s2s_attn = text_aligner(mels, mask, text_ids)
+        s2s_attn = s2s_attn.transpose(-1, -2)
+        s2s_attn = s2s_attn[..., 1:]
+        s2s_attn = s2s_attn.transpose(-1, -2)
 
         mask_ST = mask_from_lens(
             s2s_attn, input_lengths, torch.LongTensor([mel_len // (2 ** n_down)]).to(device)
