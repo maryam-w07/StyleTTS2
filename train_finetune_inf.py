@@ -271,7 +271,7 @@ def main(config_path, inference, audio_path, text):
 
         # 2. Phonemize the input text
         phoneme_text = phonemize(
-            text, language='en-gb', backend='espeak', strip=False, preserve_punctuation=True, njobs=1,separator={'phoneme': ' ', 'word': ' | '}
+            text, language='en-gb', backend='espeak', strip=False, preserve_punctuation=True, njobs=1,separator=Separator(phone=' ', word=' | ')
         )
         # Optionally remove extra spaces or join if your text_cleaner expects a string
         
