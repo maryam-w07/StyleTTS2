@@ -272,7 +272,7 @@ def main(config_path, inference, audio_path, text):
 
         # 2. Phonemize the input text
         phoneme_text = phonemize(
-            text, language='en-gb', backend='espeak', strip=False, preserve_punctuation=False, njobs=1
+            text, language='en-gb', backend='espeak', strip=False, preserve_punctuation=True, njobs=1
         )
         
         
