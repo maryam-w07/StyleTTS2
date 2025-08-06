@@ -275,7 +275,7 @@ def main(config_path, inference, audio_path, text):
         )
         # Optionally remove extra spaces or join if your text_cleaner expects a string
         phoneme_text = phoneme_text.replace(" ", "")
-        # print("Phonemized text:", phoneme_text)
+        print("Phonemized text:", phoneme_text)
 
         # 3. Prepare text ids
         text_cleaner = train_dataloader.dataset.text_cleaner
