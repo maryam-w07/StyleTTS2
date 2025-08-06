@@ -291,7 +291,8 @@ def main(config_path, inference, audio_path, text):
 
         with torch.no_grad():
             mel_len = mels.shape[-1]
-            mask = length_to_mask(torch.LongTensor([mel_len // (2 ** n_down)])).to(device)
+            mask_length = (mel_len + (2 ** n_down) - 1) // (2 ** n_down)
+            mask = length_to_mask(torch.LongTensor([mask_length])).to(device)
             print("mels:", mels.shape)
             print("text_ids:", text_ids.shape)
             print("mask:", mask.shape)
