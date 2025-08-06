@@ -113,9 +113,9 @@ def main(config_path, inference, audio_path, text):
             wav = wav[:, 0]
         if sr != sample_rate:
             wav = librosa.resample(wav, orig_sr=sr, target_sr=sample_rate)
-    # Pad with 5000 zeros at start and end (as in meldataset.py)
-    wav = np.concatenate([np.zeros([5000]), wav, np.zeros([5000])], axis=0)
-    return wav
+        # Pad with 5000 zeros at start and end (as in meldataset.py)
+        wav = np.concatenate([np.zeros([5000]), wav, np.zeros([5000])], axis=0)
+        return wav
 
     
     train_list, val_list = get_data_path_list(train_path, val_path)
