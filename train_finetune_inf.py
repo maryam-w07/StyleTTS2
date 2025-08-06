@@ -280,7 +280,7 @@ def main(config_path, inference, audio_path, text):
         # 3. Prepare text ids
         text_cleaner = train_dataloader.dataset.text_cleaner
         text_ids = torch.LongTensor(
-            text_cleaner.text_to_sequence(phoneme_text)
+            text_cleaner(phoneme_text)
         ).unsqueeze(0).to(device)
         input_lengths = torch.LongTensor([text_ids.shape[1]]).to(device)
 
