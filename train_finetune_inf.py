@@ -317,10 +317,11 @@ def main(config_path, inference, audio_path, text):
         # 6. Build viseme JSON
         start_ms = 0.0
         output_json = []
+        word_separators = {"|", " | "}  
         for pid, dur in zip(ph_ids, durations):
             symbol = id2ph.get(pid, f"[UNK_{pid}]")
             duration_ms = dur * frame_duration_ms
-            if symbol in skip_symbols:
+            if symbol in skip_symbols or symbol in word_separators:
                 start_ms += duration_ms
                 continue
             viseme_id = phoneme_to_viseme.get(symbol)
