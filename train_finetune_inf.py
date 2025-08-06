@@ -257,7 +257,7 @@ def main(config_path, inference, audio_path, text):
         with open('/content/phoneme_to_viseme.json', 'r', encoding='utf-8') as f:
             phoneme_to_viseme = json.load(f)
 
-        #skip_symbols = set(';:,.!?¡¿—…\"«»“”ǃˈˌːˑʼ˞↓↑→↗↘̩ᵻ1234567890')
+        skip_symbols = set(';:,.!?¡¿—…\"«»“”ǃˈˌːˑʼ˞↓↑→↗↘̩ᵻ')
         hop_length = 300
         sample_rate = 24000
         frame_duration_ms = hop_length / sample_rate * 1000  # = 12.5 ms
