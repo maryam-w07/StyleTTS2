@@ -256,7 +256,7 @@ def main(config_path, inference, audio_path, text):
         with open('/content/phoneme_to_viseme.json', 'r', encoding='utf-8') as f:
             phoneme_to_viseme = json.load(f)
 
-        skip_symbols = set(';:,.!?¡¿—…\"«»“”ǃˈˌːˑʼ˞↓↑→↗↘̩ᵻ')
+        skip_symbols = set(';:,.!?¡¿—…\"«»“”ǃˈˌːˑʼ˞↓↑→↗↘̩ᵻ1234567890')
         hop_length = 300
         sample_rate = 24000
         frame_duration_ms = hop_length / sample_rate * 1000  # = 12.5 ms
@@ -271,7 +271,7 @@ def main(config_path, inference, audio_path, text):
 
         # 2. Phonemize the input text
         phoneme_text = phonemize(
-            text, language='en-us', backend='espeak', strip=True, preserve_punctuation=True, njobs=1
+            text, language='en-gb', backend='espeak', strip=False, preserve_punctuation=True, njobs=1
         )
         # Optionally remove extra spaces or join if your text_cleaner expects a string
         phoneme_text = phoneme_text.replace(" ", "")
