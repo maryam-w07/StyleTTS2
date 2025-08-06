@@ -274,7 +274,7 @@ def main(config_path, inference, audio_path, text):
             text, language='en-gb', backend='espeak', strip=False, preserve_punctuation=True, njobs=1
         )
         # Optionally remove extra spaces or join if your text_cleaner expects a string
-        phoneme_text = phoneme_text.replace(" ", "")
+        
         print("Phonemized text:", phoneme_text)
 
         # 3. Prepare text ids
