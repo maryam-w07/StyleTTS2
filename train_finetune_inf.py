@@ -272,9 +272,9 @@ def main(config_path, inference, audio_path, text):
 
         # 2. Phonemize the input text
         phoneme_text = phonemize(
-            text, language='en-gb', backend='espeak', strip=False, preserve_punctuation=False, njobs=1,separator=Separator(phone=' ', word=' | ')
+            text, language='en-gb', backend='espeak', strip=False, preserve_punctuation=False, njobs=1
         )
-        # Optionally remove extra spaces or join if your text_cleaner expects a string
+        
         
         print("Phonemized text:", phoneme_text)
 
@@ -322,7 +322,7 @@ def main(config_path, inference, audio_path, text):
         for pid, dur in zip(ph_ids, durations):
             symbol = id2ph.get(pid, f"[UNK_{pid}]")
             duration_ms = dur * frame_duration_ms
-            if symbol in skip_symbols or symbol in word_separators:
+            if symbol in skip_symbols:
                 start_ms += duration_ms
                 continue
             viseme_id = phoneme_to_viseme.get(symbol)
