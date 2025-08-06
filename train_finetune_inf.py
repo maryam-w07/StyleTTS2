@@ -19,6 +19,7 @@ import json
 warnings.simplefilter('ignore')
 from torch.utils.tensorboard import SummaryWriter
 from phonemizer import phonemize
+from phonemizer.separator import Separator
 
 from meldataset import build_dataloader
 
