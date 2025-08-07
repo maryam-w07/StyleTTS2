@@ -276,6 +276,7 @@ def main(config_path, inference, audio_path, text):
             strip=False,
             preserve_punctuation=False,
             njobs=1,
+            separator=Separator(phone=' ', word=' | ')
             
         )
     
