@@ -282,6 +282,7 @@ def main(config_path, inference, audio_path, text):
         print("Phonemized text:", phoneme_text)
         phonemes = [ph for ph in phoneme_text.split() if ph not in skip_symbols]
         phoneme_text_filtered = " ".join(phonemes)
+        print("Filtered phoneme tokens:", phonemes)
     
         # 3. Prepare text ids
         text_cleaner = train_dataloader.dataset.text_cleaner
