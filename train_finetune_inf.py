@@ -312,6 +312,7 @@ def main(config_path, inference, audio_path, text):
             d_gt = s2s_attn_mono.sum(axis=-1).detach().cpu().numpy()
             ph_ids = text_ids[0].cpu().tolist()
             durations = d_gt[0].tolist()
+            id2ph = {v: k for k, v in text_cleaner.word_index_dictionary.items()}
             print("[DEBUG] Durations (frames) assigned to each phoneme:")
             for i, (ph_id, dur) in enumerate(zip(ph_ids, durations)):
                 symbol = id2ph.get(ph_id, f"[UNK_{ph_id}]")
