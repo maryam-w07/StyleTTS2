@@ -245,7 +245,9 @@ def main(config_path, inference, audio_path, text):
                                     load_only_params=config.get('load_only_params', True))
         
     n_down = model.text_aligner.n_down
+    
     # inference function definition
+    
     def inference_viseme_json(audio_path, text):
         """
         Given an audio file and input text, produce viseme JSON using forced alignment from the ASR model.
@@ -332,49 +334,49 @@ def main(config_path, inference, audio_path, text):
             print(f"[DEBUG] Sum of all durations: {sum(filtered_durations)}")
             # ---- ------------------------------------- ----
 
-    # 5. Build id2ph mapping (phoneme ID → symbol)
-    id2ph = {v: k for k, v in text_cleaner.word_index_dictionary.items()}
-
-    # ---- MEL FRAMES TO PHONEME DEBUG PRINTS ----
-    n_mel_frames = mels.shape[-1]
-    print(f"\n[DEBUG] Total mel frames: {n_mel_frames}")
-
-    # Map each mel frame to its phoneme symbol (using filtered list)
-    frame_to_phoneme = []
-    for ph_id, dur in zip(filtered_ph_ids, filtered_durations):
-        symbol = id2ph.get(ph_id, f"[UNK_{ph_id}]")
-        for _ in range(int(dur)):
-            frame_to_phoneme.append(symbol)
-
-    print("[Mel Frame ↔ Phoneme]:")
-    for i, symbol in enumerate(frame_to_phoneme):
-        print(f"  Frame {i}: {symbol}")
-
-    print(f"[DEBUG] Total mapped frames: {len(frame_to_phoneme)}")
-    if len(frame_to_phoneme) != n_mel_frames:
-        print(f"[WARNING] Mismatch! Mel frames: {n_mel_frames}, mapped: {len(frame_to_phoneme)}")
-    # --------------------------------------------
-    # 6. Build viseme JSON
-    start_ms = 0.0
-    output_json = []
-    for pid, dur in zip(filtered_ph_ids, filtered_durations):
-        symbol = id2ph.get(pid, f"[UNK_{pid}]")
-        duration_ms = dur * frame_duration_ms
-        viseme_id = phoneme_to_viseme.get(symbol)
-        if viseme_id is None:
+        # 5. Build id2ph mapping (phoneme ID → symbol)
+        id2ph = {v: k for k, v in text_cleaner.word_index_dictionary.items()}
+    
+        # ---- MEL FRAMES TO PHONEME DEBUG PRINTS ----
+        n_mel_frames = mels.shape[-1]
+        print(f"\n[DEBUG] Total mel frames: {n_mel_frames}")
+    
+        # Map each mel frame to its phoneme symbol (using filtered list)
+        frame_to_phoneme = []
+        for ph_id, dur in zip(filtered_ph_ids, filtered_durations):
+            symbol = id2ph.get(ph_id, f"[UNK_{ph_id}]")
+            for _ in range(int(dur)):
+                frame_to_phoneme.append(symbol)
+    
+        print("[Mel Frame ↔ Phoneme]:")
+        for i, symbol in enumerate(frame_to_phoneme):
+            print(f"  Frame {i}: {symbol}")
+    
+        print(f"[DEBUG] Total mapped frames: {len(frame_to_phoneme)}")
+        if len(frame_to_phoneme) != n_mel_frames:
+            print(f"[WARNING] Mismatch! Mel frames: {n_mel_frames}, mapped: {len(frame_to_phoneme)}")
+        # --------------------------------------------
+        # 6. Build viseme JSON
+        start_ms = 0.0
+        output_json = []
+        for pid, dur in zip(filtered_ph_ids, filtered_durations):
+            symbol = id2ph.get(pid, f"[UNK_{pid}]")
+            duration_ms = dur * frame_duration_ms
+            viseme_id = phoneme_to_viseme.get(symbol)
+            if viseme_id is None:
+                start_ms += duration_ms
+                continue
+            output_json.append({
+                "offset": round(start_ms, 3),
+                "visemeId": viseme_id
+            })
             start_ms += duration_ms
-            continue
-        output_json.append({
-            "offset": round(start_ms, 3),
-            "visemeId": viseme_id
-        })
-        start_ms += duration_ms
-
-    print(json.dumps(output_json, indent=4))
-    return output_json
+    
+        print(json.dumps(output_json, indent=4))
+        return output_json
 
 
-        # inference function call
+    # inference function call
         
     if inference:
         assert audio_path is not None, "You must provide --audio_path for inference"
