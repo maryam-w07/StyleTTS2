@@ -271,12 +271,12 @@ def main(config_path, inference, audio_path, text):
         # 2. Phonemize the input text
         phoneme_text = phonemize(
             text,
-            language='en-gb',
+            language='en-us',
             backend='espeak',
             strip=False,
-            preserve_punctuation=True,
+            preserve_punctuation=False,
             njobs=1,
-            separator=Separator(phone=' ', word='  ')
+            
         )
     
         print("Phonemized text:", phoneme_text)
@@ -312,6 +312,11 @@ def main(config_path, inference, audio_path, text):
             d_gt = s2s_attn_mono.sum(axis=-1).detach().cpu().numpy()
             ph_ids = text_ids[0].cpu().tolist()
             durations = d_gt[0].tolist()
+            print("[DEBUG] Durations (frames) assigned to each phoneme:")
+            for i, (ph_id, dur) in enumerate(zip(ph_ids, durations)):
+                symbol = id2ph.get(ph_id, f"[UNK_{ph_id}]")
+                print(f"  Phoneme {i}: {symbol} -> {dur:.2f} frames")
+            print(f"[DEBUG] Sum of all durations: {sum(durations)}")
     
         # 5. Build id2ph mapping (phoneme ID → symbol)
         id2ph = {v: k for k, v in text_cleaner.word_index_dictionary.items()}
