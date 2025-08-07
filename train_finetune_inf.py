@@ -247,90 +247,90 @@ def main(config_path, inference, audio_path, text):
     n_down = model.text_aligner.n_down
     # inference function definition
     def inference_viseme_json(audio_path, text):
-    """
-    Given an audio file and input text, produce viseme JSON using forced alignment from the ASR model.
-    Assumes all needed objects (model, train_dataloader, etc.) are loaded in script.
-    """
-    from phonemizer.separator import Separator
-    import json
-    import torch
-
-    # Load phoneme_to_viseme mapping
-    with open('/content/phoneme_to_viseme.json', 'r', encoding='utf-8') as f:
-        phoneme_to_viseme = json.load(f)
-
-    skip_symbols = set(';:,.!?¡¿—…\"«»“”ǃˈˌːˑʼ˞↓↑→↗↘̩ᵻ|')
-    hop_length = 300
-    sample_rate = 24000
-    frame_duration_ms = hop_length / sample_rate * 1000  # = 12.5 ms
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-    # 1. Load and preprocess audio to get mel spectrogram
-    wav = prepare_audio(audio_path, sample_rate=sample_rate)
-    mels = extract_mel(wav)
-    mels = mels.to(device)
-
-    # 2. Phonemize the input text
-    phoneme_text = phonemize(
-        text,
-        language='en-us',
-        backend='espeak',
-        strip=False,
-        preserve_punctuation=False,
-        njobs=1,
-        separator=Separator(phone=' ', word=' | ')
-    )
-
-    print("Phonemized text:", phoneme_text)
-    # (We still print filtered phoneme tokens for debug)
-    phonemes = [ph for ph in phoneme_text.strip().split() if ph not in skip_symbols]
-    phoneme_text_filtered = " ".join(phonemes)
-    print("Filtered phoneme tokens:", phoneme_text_filtered)
-
-    # 3. Prepare text ids (as before)
-    text_cleaner = train_dataloader.dataset.text_cleaner
-    text_ids = torch.LongTensor(
-        text_cleaner(phoneme_text_filtered)
-    ).unsqueeze(0).to(device)
-    input_lengths = torch.LongTensor([text_ids.shape[1]]).to(device)
-
-    # 4. Run forced alignment with real mels
-    text_aligner = model['text_aligner']
-    text_aligner.eval()
-    n_down = text_aligner.n_down
-
-    with torch.no_grad():
-        mel_len = mels.shape[-1]
-        mask_length = (mel_len + (2 ** n_down) - 1) // (2 ** n_down)
-        mask = length_to_mask(torch.LongTensor([mask_length])).to(device)
-        _, _, s2s_attn = text_aligner(mels, mask, text_ids)
-
-        s2s_attn = s2s_attn.transpose(-1, -2)
-        s2s_attn = s2s_attn[..., 1:]
-        s2s_attn = s2s_attn.transpose(-1, -2)
-
-        mask_ST = mask_from_lens(
-            s2s_attn,
-            input_lengths,
-            torch.LongTensor([mel_len // (2 ** n_down)]).to(device)
+        """
+        Given an audio file and input text, produce viseme JSON using forced alignment from the ASR model.
+        Assumes all needed objects (model, train_dataloader, etc.) are loaded in script.
+        """
+        from phonemizer.separator import Separator
+        import json
+        import torch
+    
+        # Load phoneme_to_viseme mapping
+        with open('/content/phoneme_to_viseme.json', 'r', encoding='utf-8') as f:
+            phoneme_to_viseme = json.load(f)
+    
+        skip_symbols = set(';:,.!?¡¿—…\"«»“”ǃˈˌːˑʼ˞↓↑→↗↘̩ᵻ|')
+        hop_length = 300
+        sample_rate = 24000
+        frame_duration_ms = hop_length / sample_rate * 1000  # = 12.5 ms
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    
+        # 1. Load and preprocess audio to get mel spectrogram
+        wav = prepare_audio(audio_path, sample_rate=sample_rate)
+        mels = extract_mel(wav)
+        mels = mels.to(device)
+    
+        # 2. Phonemize the input text
+        phoneme_text = phonemize(
+            text,
+            language='en-us',
+            backend='espeak',
+            strip=False,
+            preserve_punctuation=False,
+            njobs=1,
+            separator=Separator(phone=' ', word=' | ')
         )
-        s2s_attn_mono = maximum_path(s2s_attn, mask_ST)
-        d_gt = s2s_attn_mono.sum(axis=-1).detach().cpu().numpy()
-        ph_ids = text_ids[0].cpu().tolist()
-        durations = d_gt[0].tolist()
-        id2ph = {v: k for k, v in text_cleaner.word_index_dictionary.items()}
-
-        # ---- FILTER PHONEME IDs BASED ON SYMBOLS ----
-        filtered = [(ph_id, dur) for ph_id, dur in zip(ph_ids, durations)
-                    if id2ph.get(ph_id, f"[UNK_{ph_id}]") not in skip_symbols]
-        filtered_ph_ids, filtered_durations = zip(*filtered) if filtered else ([], [])
-
-        print("[DEBUG] Durations (frames) assigned to each phoneme (after skip):")
-        for i, (ph_id, dur) in enumerate(zip(filtered_ph_ids, filtered_durations)):
-            symbol = id2ph.get(ph_id, f"[UNK_{ph_id}]")
-            print(f"  Phoneme {i}: {symbol} -> {dur:.2f} frames")
-        print(f"[DEBUG] Sum of all durations: {sum(filtered_durations)}")
-        # ---- ------------------------------------- ----
+    
+        print("Phonemized text:", phoneme_text)
+        # (We still print filtered phoneme tokens for debug)
+        phonemes = [ph for ph in phoneme_text.strip().split() if ph not in skip_symbols]
+        phoneme_text_filtered = " ".join(phonemes)
+        print("Filtered phoneme tokens:", phoneme_text_filtered)
+    
+        # 3. Prepare text ids (as before)
+        text_cleaner = train_dataloader.dataset.text_cleaner
+        text_ids = torch.LongTensor(
+            text_cleaner(phoneme_text_filtered)
+        ).unsqueeze(0).to(device)
+        input_lengths = torch.LongTensor([text_ids.shape[1]]).to(device)
+    
+        # 4. Run forced alignment with real mels
+        text_aligner = model['text_aligner']
+        text_aligner.eval()
+        n_down = text_aligner.n_down
+    
+        with torch.no_grad():
+            mel_len = mels.shape[-1]
+            mask_length = (mel_len + (2 ** n_down) - 1) // (2 ** n_down)
+            mask = length_to_mask(torch.LongTensor([mask_length])).to(device)
+            _, _, s2s_attn = text_aligner(mels, mask, text_ids)
+    
+            s2s_attn = s2s_attn.transpose(-1, -2)
+            s2s_attn = s2s_attn[..., 1:]
+            s2s_attn = s2s_attn.transpose(-1, -2)
+    
+            mask_ST = mask_from_lens(
+                s2s_attn,
+                input_lengths,
+                torch.LongTensor([mel_len // (2 ** n_down)]).to(device)
+            )
+            s2s_attn_mono = maximum_path(s2s_attn, mask_ST)
+            d_gt = s2s_attn_mono.sum(axis=-1).detach().cpu().numpy()
+            ph_ids = text_ids[0].cpu().tolist()
+            durations = d_gt[0].tolist()
+            id2ph = {v: k for k, v in text_cleaner.word_index_dictionary.items()}
+    
+            # ---- FILTER PHONEME IDs BASED ON SYMBOLS ----
+            filtered = [(ph_id, dur) for ph_id, dur in zip(ph_ids, durations)
+                        if id2ph.get(ph_id, f"[UNK_{ph_id}]") not in skip_symbols]
+            filtered_ph_ids, filtered_durations = zip(*filtered) if filtered else ([], [])
+    
+            print("[DEBUG] Durations (frames) assigned to each phoneme (after skip):")
+            for i, (ph_id, dur) in enumerate(zip(filtered_ph_ids, filtered_durations)):
+                symbol = id2ph.get(ph_id, f"[UNK_{ph_id}]")
+                print(f"  Phoneme {i}: {symbol} -> {dur:.2f} frames")
+            print(f"[DEBUG] Sum of all durations: {sum(filtered_durations)}")
+            # ---- ------------------------------------- ----
 
     # 5. Build id2ph mapping (phoneme ID → symbol)
     id2ph = {v: k for k, v in text_cleaner.word_index_dictionary.items()}
@@ -372,7 +372,6 @@ def main(config_path, inference, audio_path, text):
 
     print(json.dumps(output_json, indent=4))
     return output_json
-
 
 
         # inference function call
