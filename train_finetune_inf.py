@@ -261,7 +261,6 @@ def main(config_path, inference, audio_path, text):
         with open('/content/phoneme_to_viseme.json', 'r', encoding='utf-8') as f:
             phoneme_to_viseme = json.load(f)
     
-        skip_symbols = set(';:,.!?¡¿—…\"«»“”ǃˈˌːˑʼ˞↓↑→↗↘̩ᵻ|')
         hop_length = 300
         sample_rate = 24000
         frame_duration_ms = hop_length / sample_rate * 1000  # = 12.5 ms
@@ -284,15 +283,13 @@ def main(config_path, inference, audio_path, text):
         )
     
         print("Phonemized text:", phoneme_text)
-        # (We still print filtered phoneme tokens for debug)
-        phonemes = [ph for ph in phoneme_text.strip().split() if ph not in skip_symbols]
-        phoneme_text_filtered = " ".join(phonemes)
-        print("Filtered phoneme tokens:", phoneme_text_filtered)
+        phonemes = phoneme_text.strip().split()
+        print("Phoneme tokens:", phonemes)
     
         # 3. Prepare text ids (as before)
         text_cleaner = train_dataloader.dataset.text_cleaner
         text_ids = torch.LongTensor(
-            text_cleaner(phoneme_text_filtered)
+            text_cleaner(" ".join(phonemes))
         ).unsqueeze(0).to(device)
         input_lengths = torch.LongTensor([text_ids.shape[1]]).to(device)
     
@@ -320,60 +317,50 @@ def main(config_path, inference, audio_path, text):
             d_gt = s2s_attn_mono.sum(axis=-1).detach().cpu().numpy()
             ph_ids = text_ids[0].cpu().tolist()
             durations = d_gt[0].tolist()
-            id2ph = {v: k for k, v in text_cleaner.word_index_dictionary.items()}
-    
-            # ---- FILTER PHONEME IDs BASED ON SYMBOLS ----
-            filtered = [(ph_id, dur) for ph_id, dur in zip(ph_ids, durations)
-                        if id2ph.get(ph_id, f"[UNK_{ph_id}]") not in skip_symbols]
-            filtered_ph_ids, filtered_durations = zip(*filtered) if filtered else ([], [])
-    
-            print("[DEBUG] Durations (frames) assigned to each phoneme (after skip):")
-            for i, (ph_id, dur) in enumerate(zip(filtered_ph_ids, filtered_durations)):
-                symbol = id2ph.get(ph_id, f"[UNK_{ph_id}]")
-                print(f"  Phoneme {i}: {symbol} -> {dur:.2f} frames")
-            print(f"[DEBUG] Sum of all durations: {sum(filtered_durations)}")
-            # ---- ------------------------------------- ----
-
-        # 5. Build id2ph mapping (phoneme ID → symbol)
+            
         id2ph = {v: k for k, v in text_cleaner.word_index_dictionary.items()}
-    
-        # ---- MEL FRAMES TO PHONEME DEBUG PRINTS ----
-        n_mel_frames = mels.shape[-1]
-        print(f"\n[DEBUG] Total mel frames: {n_mel_frames}")
-    
-        # Map each mel frame to its phoneme symbol (using filtered list)
-        frame_to_phoneme = []
-        for ph_id, dur in zip(filtered_ph_ids, filtered_durations):
+
+        print("[DEBUG] Durations (frames) assigned to each phoneme:")
+        for i, (ph_id, dur) in enumerate(zip(ph_ids, durations)):
             symbol = id2ph.get(ph_id, f"[UNK_{ph_id}]")
-            for _ in range(int(dur)):
-                frame_to_phoneme.append(symbol)
+            print(f"  Phoneme {i}: {symbol} -> {dur:.2f} frames")
+        print(f"[DEBUG] Sum of all durations: {sum(durations)}")
+
+        # 5. MEL FRAMES TO PHONEME mapping with rounding & adjustment
+        n_mel_frames = mels.shape[-1]
+        rounded_durations = [round(d) for d in durations]
+        frame_diff = n_mel_frames - sum(rounded_durations)
+        if rounded_durations:
+            rounded_durations[-1] += frame_diff  # fix total frame count to match mel frames
     
-        print("[Mel Frame ↔ Phoneme]:")
-        for i, symbol in enumerate(frame_to_phoneme):
-            print(f"  Frame {i}: {symbol}")
+        frame_to_phoneme = []
+        for ph_id, dur in zip(ph_ids, rounded_durations):
+            symbol = id2ph.get(ph_id, f"[UNK_{ph_id}]")
+            frame_to_phoneme.extend([symbol] * int(dur))
     
+        print(f"\n[DEBUG] Total mel frames: {n_mel_frames}")
         print(f"[DEBUG] Total mapped frames: {len(frame_to_phoneme)}")
         if len(frame_to_phoneme) != n_mel_frames:
             print(f"[WARNING] Mismatch! Mel frames: {n_mel_frames}, mapped: {len(frame_to_phoneme)}")
-        # --------------------------------------------
-        # 6. Build viseme JSON
+    
+        # 6. Build viseme JSON, skipping phonemes without viseme IDs (but keeping timing)
         start_ms = 0.0
         output_json = []
-        for pid, dur in zip(filtered_ph_ids, filtered_durations):
-            symbol = id2ph.get(pid, f"[UNK_{pid}]")
-            duration_ms = dur * frame_duration_ms
+        for ph_id, dur in zip(ph_ids, rounded_durations):
+            symbol = id2ph.get(ph_id, f"[UNK_{ph_id}]")
             viseme_id = phoneme_to_viseme.get(symbol)
-            if viseme_id is None:
-                start_ms += duration_ms
-                continue
-            output_json.append({
-                "offset": round(start_ms, 3),
-                "visemeId": viseme_id
-            })
+            duration_ms = dur * frame_duration_ms
+            if viseme_id is not None:
+                output_json.append({
+                    "offset": round(start_ms, 3),
+                    "visemeId": viseme_id
+                })
+            # Advance time regardless of viseme output
             start_ms += duration_ms
-    
+
         print(json.dumps(output_json, indent=4))
         return output_json
+    
 
 
     # inference function call
