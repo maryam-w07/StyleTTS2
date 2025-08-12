@@ -261,7 +261,7 @@ def main(config_path, inference, audio_path, text):
             phoneme_to_viseme = json.load(f)
     
         # Skip symbols (from training debug patch)
-        SKIPPED_SYMBOLS = set(';:,.!?¡¿—…\"«»“”ǃˈˌːˑʼ˞↓↑→↗↘̩')
+        SKIPPED_SYMBOLS = set(';:,.!?¡¿—…\"«»“”ǃˈˌˑʼ˞↓↑→↗↘̩')
     
         hop_length = 300
         sample_rate = 24000
