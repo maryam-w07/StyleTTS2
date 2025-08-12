@@ -267,7 +267,7 @@ def main(config_path, inference, audio_path, text):
     
         hop_length = 300
         sample_rate = 24000
-        frame_duration_ms = hop_length / sample_rate * 1000  # = 12.5 ms
+        frame_duration_ms = 25.0
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
         # 1. Load and preprocess audio to get mel spectrogram
