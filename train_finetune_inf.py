@@ -285,6 +285,7 @@ def main(config_path, inference, audio_path, text):
     
         print("Phonemized text:", phoneme_text)
         phonemes = phoneme_text.strip().split()
+        phonemes = [p for p in phonemes if p != '|']
         print("Phoneme tokens:", phonemes)
     
         # 3. Prepare text ids
