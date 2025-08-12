@@ -245,13 +245,11 @@ def main(config_path, inference, audio_path, text):
                                     load_only_params=config.get('load_only_params', True))
         
     n_down = model.text_aligner.n_down
-    
-    # inference function definition
-        
+
     def inference_viseme_json(audio_path, text):
         """
         Given an audio file and input text, produce viseme JSON using forced alignment from the ASR model.
-        Excludes certain phonemes from being assigned to viseme frames.
+        Excludes certain phonemes from being assigned to viseme frames, but still advances time for them.
         """
         from phonemizer import phonemize
         from phonemizer.separator import Separator
@@ -262,18 +260,17 @@ def main(config_path, inference, audio_path, text):
         with open('/content/phoneme_to_viseme.json', 'r', encoding='utf-8') as f:
             phoneme_to_viseme = json.load(f)
     
-        # Phonemes to skip entirely
-        SKIPPED_PHONEMES = {'ᵻ', 'ː'}
+        # Skip symbols (from training debug patch)
+        SKIPPED_SYMBOLS = set(';:,.!?¡¿—…\"«»“”ǃˈˌːˑʼ˞↓↑→↗↘̩ᵻ')
     
         hop_length = 300
         sample_rate = 24000
-        frame_duration_ms = 25.0
+        frame_duration_ms = 25.0  # match training
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
         # 1. Load and preprocess audio to get mel spectrogram
         wav = prepare_audio(audio_path, sample_rate=sample_rate)
-        mels = extract_mel(wav)
-        mels = mels.to(device)
+        mels = extract_mel(wav).to(device)
     
         # 2. Phonemize the input text
         phoneme_text = phonemize(
@@ -297,7 +294,7 @@ def main(config_path, inference, audio_path, text):
         ).unsqueeze(0).to(device)
         input_lengths = torch.LongTensor([text_ids.shape[1]]).to(device)
     
-        # 4. Run forced alignment with real mels
+        # 4. Run forced alignment
         text_aligner = model['text_aligner']
         text_aligner.eval()
         n_down = text_aligner.n_down
@@ -308,10 +305,7 @@ def main(config_path, inference, audio_path, text):
             mask = length_to_mask(torch.LongTensor([mask_length])).to(device)
             _, _, s2s_attn = text_aligner(mels, mask, text_ids)
     
-            s2s_attn = s2s_attn.transpose(-1, -2)
-            s2s_attn = s2s_attn[..., 1:]
-            s2s_attn = s2s_attn.transpose(-1, -2)
-    
+            s2s_attn = s2s_attn.transpose(-1, -2)[..., 1:].transpose(-1, -2)
             mask_ST = mask_from_lens(
                 s2s_attn,
                 input_lengths,
@@ -324,63 +318,32 @@ def main(config_path, inference, audio_path, text):
     
         id2ph = {v: k for k, v in text_cleaner.word_index_dictionary.items()}
     
-        # 5. Filter out skipped phonemes
-        filtered_symbols = []
-        filtered_durations = []
-    
+        # 5. Build viseme JSON (no rounding redistribution)
+        output_json = []
+        start_ms = 0.0
         for ph_id, dur in zip(ph_ids, durations):
             symbol = id2ph.get(ph_id, f"[UNK_{ph_id}]")
-            if symbol in SKIPPED_PHONEMES:
-                print(f"[INFO] Skipping phoneme '{symbol}' from frame allocation.")
+            duration_ms = dur * frame_duration_ms
+    
+            if symbol in SKIPPED_SYMBOLS:
+                print(f"[INFO] Skipping viseme mapping for '{symbol}', advancing time by {duration_ms:.2f} ms")
+                start_ms += duration_ms
                 continue
-            filtered_symbols.append(symbol)
-            filtered_durations.append(dur)
     
-        print("[DEBUG] Durations (frames) assigned to each phoneme (filtered):")
-        for i, (symbol, dur) in enumerate(zip(filtered_symbols, filtered_durations)):
-            print(f"  Phoneme {i}: {symbol} -> {dur:.2f} frames")
-    
-        n_mel_frames = mels.shape[-1]
-        rounded_durations = [round(d) for d in filtered_durations]
-        frame_diff = n_mel_frames - sum(rounded_durations)
-        if rounded_durations:
-            rounded_durations[-1] += frame_diff  # fix total frame count to match mel frames
-    
-        frame_to_phoneme = []
-        for symbol, dur in zip(filtered_symbols, rounded_durations):
-            frame_to_phoneme.extend([symbol] * int(dur))
-    
-        print(f"\n[DEBUG] Total mel frames: {n_mel_frames}")
-        print(f"[DEBUG] Total mapped frames: {len(frame_to_phoneme)}")
-        if len(frame_to_phoneme) != n_mel_frames:
-            print(f"[WARNING] Mismatch! Mel frames: {n_mel_frames}, mapped: {len(frame_to_phoneme)}")
-    
-        # 6. Build per-frame viseme list
-        frame_to_viseme = [
-            phoneme_to_viseme.get(symbol, 0)
-            for symbol in frame_to_phoneme
-        ]
-    
-        # Report phonemes that are not in phoneme_to_viseme
-        missing_phonemes = set()
-        for symbol in frame_to_phoneme:
-            if symbol not in phoneme_to_viseme and symbol not in missing_phonemes:
+            viseme_id = phoneme_to_viseme.get(symbol, 0)
+            if symbol not in phoneme_to_viseme:
                 print(f"[INFO] Phoneme '{symbol}' does not have a viseme mapping (assigned viseme 0).")
-                missing_phonemes.add(symbol)
     
-        # 7. Group consecutive frames with the same visemeId and emit events
-        output_json = []
-        last_viseme = None
-        for i, viseme_id in enumerate(frame_to_viseme):
-            if viseme_id != last_viseme:
-                output_json.append({
-                    "offset": round(i * frame_duration_ms, 3),
-                    "visemeId": viseme_id
-                })
-                last_viseme = viseme_id
+            output_json.append({
+                "offset": round(start_ms, 3),
+                "visemeId": viseme_id
+            })
+            start_ms += duration_ms
     
         print(json.dumps(output_json, indent=4))
         return output_json
+    
+
 
     
 
